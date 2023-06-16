@@ -1,6 +1,7 @@
 # Vecrocks
 
-Vecrocks is a vector database based on RocksDB
+Vecrocks is a vector database based on [RocksDB](https://github.com/facebook/rocksdb)
+and [faiss](https://github.com/facebookresearch/faiss)
 
 ## Development
 

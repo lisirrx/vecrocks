@@ -1,26 +1,9 @@
-#include <faiss/IndexFlat.h>
-
 #include <cassert>
-#include <cstdio>
-#include <cstdlib>
-#include <iostream>
 #include <random>
 
 #include "rocksdb/db.h"
 #include "vecrocks.h"
 
-// 64-bit int
-using idx_t = faiss::idx_t;
-
-std::string printArray(float* vec, int d) {
-  std::string s{"[ "};
-  for (int i = 0; i < d; ++i) {
-    s += std::to_string(vec[i]);
-    s += " ";
-  }
-  s += "]\n";
-  return s;
-}
 
 void vecrocksTest() {
   const std::string PATH = "./testdb";
@@ -28,6 +11,7 @@ void vecrocksTest() {
 
   auto db = new Vecrocks::DB(DIM);
   db->Init(PATH);
+  // Add 4 vectors to db
   float a[2] = {0, 1.0};
   float b[2] = {0, 2.0};
   float c[2] = {0, -2.0};
@@ -46,19 +30,32 @@ void vecrocksTest() {
 
   float* res;
   db_for_read->Get(1, res);
-  printArray(res, 2);
 
+  // Get the (0, 1) vec
+  assert(res[0] == 0.);
+  assert(res[1] == 1.0);
+
+  // find 2 the most similar vector to (0, 0)
   int k = 2;
   float q[2] = {0, 0};
 
   auto search_result = db_for_read->Search(q, k);
-  for (Vecrocks::SearchResult result : search_result) {
-    db_for_read->Get(result.id, res);
-    std::cout << result.id << " : " << printArray(res, DIM);
-  }
+
+  // Get (0,1) and (0,-1)
+  assert(search_result[0].id == 1);
+  assert(search_result[1].id == 4);
+
+  db_for_read->Get(1, res);
+  assert(res[0] == 0.);
+  assert(res[1] == 1.);
+
+  db_for_read->Get(4, res);
+  assert(res[0] == 0.);
+  assert(res[1] == -1.);
+
+  delete db_for_read;
 }
 
 int main() {
-  // create the Collection
   vecrocksTest();
 }
