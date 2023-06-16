@@ -6,10 +6,10 @@ set(CMAKE_CXX_STANDARD 17)
 
 include(cmake/rocksdb.cmake)
 include(cmake/gtest.cmake)
-
+include(cmake/faiss.cmake)
 
 set(SOURCES
-        src/vecrocks.cpp)
+        src/vecrocks.cpp include/vecrocks.h)
 
 set(TEST_SOURCES
         test/test.cpp)
@@ -17,8 +17,8 @@ set(TEST_SOURCES
 
 # LIB
 add_library(vecrocks STATIC ${SOURCES})
-target_link_libraries(vecrocks PRIVATE rocksdb)
-target_include_directories(vecrocks PRIVATE ${rocksdb_SOURCE_DIR}/include)
+target_link_libraries(vecrocks PRIVATE rocksdb faiss)
+target_include_directories(vecrocks PRIVATE ${rocksdb_SOURCE_DIR}/include ${faiss_SOURCE_DIR}/include ${vecrocks_SOURCE_DIR}/include)
 
 
 # EXAMPLE
@@ -29,7 +29,7 @@ add_subdirectory(example)
 enable_testing()
 
 add_executable(vecrocks_test ${TEST_SOURCES})
-target_link_libraries(vecrocks_test PRIVATE vecrocks gtest_main rocksdb)
-target_include_directories(vecrocks_test PRIVATE ${gtest_SOURCE_DIR}/include ${rocksdb_SOURCE_DIR}/include)
+target_link_libraries(vecrocks_test PRIVATE vecrocks gtest_main rocksdb faiss)
+target_include_directories(vecrocks_test PRIVATE ${gtest_SOURCE_DIR}/include ${rocksdb_SOURCE_DIR}/include ${faiss_SOURCE_DIR}/include)
 include(GoogleTest)
 gtest_discover_tests(vecrocks_test)
