@@ -30,8 +30,6 @@ make -j1 # change the number for parallel compile
 ctest
 ```
 
-![](docs/img/ctest_demo.png)
-
 ### 3. Try example
 
 ```shell
