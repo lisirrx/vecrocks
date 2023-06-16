@@ -8,6 +8,11 @@ Vecrocks is a vector database based on RocksDB
 
 1. `cmake`
 2. C++ Compiler support `C++17`
+3. Your toolchain should support `openmp` for building `faiss` library.
+
+   If you are using macOS, you need to install llvm by `brew install llvm`.
+
+   The clang++ toolchain build in Xcode not support openmp.
 
 ### 1. Build
 
