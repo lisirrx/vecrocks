@@ -1,9 +1,10 @@
-#include <cassert>
-#include <random>
+#include <fmt/core.h>
 
+#include <cassert>
+
+#include "fmt/format.h"
 #include "rocksdb/db.h"
 #include "vecrocks.h"
-
 
 void vecrocksTest() {
   const std::string PATH = "./testdb";
@@ -58,4 +59,6 @@ void vecrocksTest() {
 
 int main() {
   vecrocksTest();
+
+  return 0;
 }
