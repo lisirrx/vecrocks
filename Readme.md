@@ -3,6 +3,8 @@
 Vecrocks is a vector database based on [RocksDB](https://github.com/facebook/rocksdb)
 and [faiss](https://github.com/facebookresearch/faiss)
 
+You can find a Design doc [here](docs/design.md)
+
 ## Development
 
 ### 0. Environment

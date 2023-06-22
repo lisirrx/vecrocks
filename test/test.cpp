@@ -4,16 +4,25 @@
 #include <gtest/gtest.h>
 
 #include "rocksdb/db.h"
-// Demonstrate some basic assertions.
-TEST(HelloTest, BasicAssertions) {
-  // Expect two strings not to be equal.
-  rocksdb::DB *db;
-  rocksdb::Options options;
-  options.create_if_missing = true;
-  rocksdb::Status status = rocksdb::DB::Open(options, "./testdb", &db);
-  std::cout << status.ToString() << std::endl;
-  assert(status.ok());
-  EXPECT_STRNE("hello", "world");
-  // Expect equality.
-  EXPECT_EQ(7 * 6, 42);
+#include "vecrocks.h"
+using codec = Vecrocks::codec;
+
+TEST(CodecEncodeKeyTest, BasicAssertions) {
+  codec codec;
+  auto key1 = codec.encode_key("Test", 1);
+  assert(key1 == "t_cTest_pk1");
+
+  key1 = codec.encode_key("", 1);
+  assert(key1 == "t_c_pk1");
+}
+
+TEST(CodecIdxTest, BasicAssertions) {
+  codec codec;
+  float float_vec[] = {1.1, 2.2};
+  auto idx1 = codec.encode_idx("Test", "Test", 1, float_vec, 2);
+
+  auto res = codec.decode_idx(idx1);
+  assert((get<0>(res))[0] == 1.1f);
+  assert((get<0>(res))[1] == 2.2f);
+  assert(get<1>(res) == 1);
 }
