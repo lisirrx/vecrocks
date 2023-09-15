@@ -1,7 +1,7 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT license.
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 
 add_executable(lazy_reinsert_batch lazy_reinsert_batch.cpp )
 if(MSVC)
@@ -86,4 +86,10 @@ add_executable(test_incr_intf test_incr_intf.cpp)
 	target_link_libraries(test_incr_intf debug ${CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG}/nsg_dll.lib)
 	target_link_libraries(test_incr_intf optimized ${CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE}/nsg_dll.lib)
 endif()
+
+add_executable(test_stream_merge test_stream_merge.cpp)
+target_link_libraries(test_stream_merge ${PROJECT_NAME} -ltcmalloc aio)
 # formatter
+
+add_executable(test_id_generator test_id_generator.cpp)
+target_link_libraries(test_id_generator ${PROJECT_NAME} -ltcmalloc aio)

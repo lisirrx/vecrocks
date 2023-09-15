@@ -6,7 +6,7 @@ if(MSVC)
 else()
 	cmake_minimum_required(VERSION 2.8)
 endif()
-set(CMAKE_STANDARD 14)
+set(CMAKE_STANDARD 17)
 
 
 #set(CMAKE_USER_MAKE_RULES_OVERRIDE "${CMAKE_CURRENT_LIST_DIR}/CompilerOptions.cmake")

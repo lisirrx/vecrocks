@@ -66,7 +66,7 @@ namespace diskann {
         _active_del_1(false), _clearing_index_0(false),
         _clearing_index_1(false), _switching_disk_prefixes(false),
         _check_switch_index(false), _check_switch_delete(false) {
-    _merge_th = MERGE_TH;
+    _merge_th = parameters.Get<unsigned>("merge_th");
     _single_file_index = single_file_index;
     this->_dist_metric = dist_metric;
     _mem_index_0 = std::make_shared<diskann::Index<T, TagT>>(
@@ -87,6 +87,8 @@ namespace diskann {
     _paras_disk.Set<float>("alpha", parameters.Get<float>("alpha_disk"));
     _paras_disk.Set<unsigned>("num_rnds", 2);
     _paras_disk.Set<bool>("saturate_graph", 0);
+
+    _skip_disk_search = parameters.Get<bool>("skip_disk_search");
 
     _num_search_threads = parameters.Get<_u32>("num_search_threads");
     _beamwidth = parameters.Get<uint32_t>("beamwidth");
@@ -114,13 +116,17 @@ namespace diskann {
 
     std::string pq_prefix = _disk_index_prefix_in + "_pq";
     std::string disk_index_file = _disk_index_prefix_in + "_disk.index";
-    int         res =
-        _disk_index->load(_disk_index_prefix_in.c_str(), _num_search_threads);
-    if (res != 0) {
-      diskann::cout << "Failed to load disk index in MergeInsert constructor"
-                    << std::endl;
-      exit(-1);
-    }
+    // todo @lh load disk
+
+    //    int         res =
+    //        _disk_index->load(_disk_index_prefix_in.c_str(),
+    //        _num_search_threads);
+    //    if (res != 0) {
+    //      diskann::cout << "Failed to load disk index in MergeInsert
+    //      constructor"
+    //                    << std::endl;
+    //      exit(-1);
+    //    }
 
     TMP_FOLDER = working_folder;
     std::cout << "TMP_FOLDER inside MergeInsert : " << TMP_FOLDER << std::endl;
@@ -130,7 +136,7 @@ namespace diskann {
   MergeInsert<T, TagT>::~MergeInsert() {
     // put in destructor code
   }
- 
+
  template<typename T, typename TagT>
  void MergeInsert<T,TagT>::construct_index_merger()
  {
@@ -209,7 +215,7 @@ namespace diskann {
                  diskann::cout << "Capacity exceeded in mem_index 1" << std::endl;
              }
          }
-        
+
     return -2;
  }
 
@@ -242,55 +248,61 @@ namespace diskann {
                      TagT* tags, float * distances, QueryStats * stats)
     {
         std::set<Neighbor_Tag<TagT>> best;
-        //search disk index and get top K tags
+        // search disk index and get top K tags
+        //  todo @lh search in-mem firstly
         {
         std::shared_lock<std::shared_timed_mutex> lock(_disk_lock);
         assert(_switching_disk_prefixes == false);
             std::vector<uint64_t> disk_result_ids_64(search_L);
             std::vector<float> disk_result_dists(search_L);
             std::vector<TagT> disk_result_tags(search_L);
-            _disk_index->cached_beam_search(
-                query, search_L, search_L, disk_result_tags.data(), disk_result_dists.data(), _beamwidth,
-                stats);
-            for(unsigned i = 0; i < disk_result_tags.size(); i++)
-            {
-                Neighbor_Tag<TagT> n;
-                n = Neighbor_Tag<TagT>(disk_result_tags[i], disk_result_dists[i]);
-//                    best.insert(Neighbor_Tag<TagT>(disk_result_tags[i], disk_result_dists[i]));
-                best.insert(n);                    
+            // todo
+            if (!_skip_disk_search) {
+                 auto result_cnt = _disk_index->cached_beam_search(
+                     query, search_L, search_L, disk_result_tags.data(),
+                     disk_result_dists.data(), _beamwidth, stats);
+                 if (result_cnt > 0) {
+                   for (unsigned i = 0; i < disk_result_tags.size(); i++) {
+                     Neighbor_Tag<TagT> n;
+                     n = Neighbor_Tag<TagT>(disk_result_tags[i],
+                                            disk_result_dists[i]);
+                     //                    best.insert(Neighbor_Tag<TagT>(disk_result_tags[i],
+                     //                    disk_result_dists[i]));
+                     best.insert(n);
+                   }
+                 }
             }
         }
-        //check each memory index - if non empty and not being currently cleared - search and get top K active tags 
+        // check each memory index - if non empty and not being currently
+        // cleared - search and get top K active tags
         {
-            if(_clearing_index_0.load() == false) 
-            {
-                std::shared_lock<std::shared_timed_mutex> lock(_clear_lock_0);
-                if(_mem_index_0->get_num_points() > 0)
-                {
-                std::vector<Neighbor_Tag<TagT>> best_mem_index_0;
-                _mem_index_0->search(query, (uint32_t)search_L, (uint32_t)search_L, best_mem_index_0);
-                for(auto iter : best_mem_index_0)
-                        best.insert(iter);
-                }
+          if (_clearing_index_0.load() == false) {
+            std::shared_lock<std::shared_timed_mutex> lock(_clear_lock_0);
+            if (_mem_index_0->get_num_points() > 0) {
+              std::vector<Neighbor_Tag<TagT>> best_mem_index_0;
+              _mem_index_0->search(query, (uint32_t) search_L,
+                                   (uint32_t) search_L, best_mem_index_0);
+              for (auto iter : best_mem_index_0)
+                best.insert(iter);
             }
-        
-            if(_clearing_index_1.load() == false) 
-            {
-                std::shared_lock<std::shared_timed_mutex> lock(_clear_lock_1);
-                if(_mem_index_1->get_num_points() > 0)
-                {
-                std::vector<Neighbor_Tag<TagT>> best_mem_index_1;
-                _mem_index_1->search(query, (uint32_t)search_L, (uint32_t)search_L, best_mem_index_1);
-                for(auto iter : best_mem_index_1)
-                        best.insert(iter);
-                }
+          }
+
+          if (_clearing_index_1.load() == false) {
+            std::shared_lock<std::shared_timed_mutex> lock(_clear_lock_1);
+            if (_mem_index_1->get_num_points() > 0) {
+              std::vector<Neighbor_Tag<TagT>> best_mem_index_1;
+              _mem_index_1->search(query, (uint32_t) search_L,
+                                   (uint32_t) search_L, best_mem_index_1);
+              for (auto iter : best_mem_index_1)
+                best.insert(iter);
             }
+          }
         }
         std::vector<Neighbor_Tag<TagT>> best_vec;
         for(auto iter : best)
             best_vec.emplace_back(iter);
 //        std::sort(best_vec.begin(), best_vec.end());
-        if (best_vec.size() > K)
+        if (best_vec.size() >= K)
 //          best_vec.erase(best_vec.begin() + K, best_vec.end());
         //aggregate results, sort and pick top K candidates
     {
@@ -341,7 +353,7 @@ namespace diskann {
          mem_in.push_back(_mem_index_prefix + "_1");
      else
          mem_in.push_back(_mem_index_prefix + "_0");
-     
+
      _merger->merge(_disk_index_prefix_in.c_str(), mem_in, _disk_index_prefix_out.c_str(), _deleted_tags_vector, TMP_FOLDER);
 
     diskann::cout << "Merge done" << std::endl;
@@ -377,51 +389,57 @@ namespace diskann {
  template<typename T, typename TagT>
  void MergeInsert<T,TagT>::switch_index()
  {
-     //unique lock throughout the function to ensure another thread does not flip the value of _active_index after it has been saved by one thread, 
-     //and multiple threads do not save the same index
-     //unique lock is acquired when no other thread holds any shared lock over it, so this function will wait till any on-going insertions are completed
-     //and then change the value of all related flags
-     {
-         bool expected_value = false;
-         _check_switch_index.compare_exchange_strong(expected_value, true);
-        std::unique_lock<std::shared_timed_mutex> lock(_index_lock);
-        //make new index active
-        if(_active_index == 0)
-        {
-            _mem_index_1 = std::make_shared<diskann::Index<T, TagT>>(this->_dist_metric, _dim, _merge_th * 2 , 1, _single_file_index, 1);
-            bool expected_active = false;
-            if (_active_1.compare_exchange_strong(expected_active, true)) {
-              diskann::cout << "Initialised new index for _mem_index_1 " << std::endl;
-            } else {
-              diskann::cout << "Failed to initialise new _mem_index_1" << std::endl;
-//              return -1;
-            }
-            
-        }
-        else
-        {
-            _mem_index_0 = std::make_shared<diskann::Index<T, TagT>>(this->_dist_metric, _dim, _merge_th * 2, 1, _single_file_index, 1);
-            bool expected_active = false;
-            if (_active_0.compare_exchange_strong(expected_active, true)) {
-              diskann::cout << "Initialised new index for _mem_index_0 " << std::endl;
-            } else {
-              diskann::cout << "Failed to initialise new _mem_index_0" << std::endl;
-  //            return -1;
-            }
-        }
-        _active_index = 1 - _active_index;
-        _mem_points = 0;
-        expected_value = true;
-         _check_switch_index.compare_exchange_strong(expected_value, false);
+   // unique lock throughout the function to ensure another thread does not flip
+   // the value of _active_index after it has been saved by one thread, and
+   // multiple threads do not save the same index unique lock is acquired when
+   // no other thread holds any shared lock over it, so this function will wait
+   // till any on-going insertions are completed and then change the value of
+   // all related flags
+   {
+     bool expected_value = false;
+     _check_switch_index.compare_exchange_strong(expected_value, true);
+     std::unique_lock<std::shared_timed_mutex> lock(_index_lock);
+     // make new index active
+     if (_active_index == 0) {
+       _mem_index_1 = std::make_shared<diskann::Index<T, TagT>>(
+           this->_dist_metric, _dim, _merge_th * 2, 1, _single_file_index, 1);
+       bool expected_active = false;
+       if (_active_1.compare_exchange_strong(expected_active, true)) {
+         diskann::cout << "Initialised new index for _mem_index_1 "
+                       << std::endl;
+       } else {
+         diskann::cout << "Failed to initialise new _mem_index_1" << std::endl;
+         //              return -1;
+       }
+
+     } else {
+       _mem_index_0 = std::make_shared<diskann::Index<T, TagT>>(
+           this->_dist_metric, _dim, _merge_th * 2, 1, _single_file_index, 1);
+       bool expected_active = false;
+       if (_active_0.compare_exchange_strong(expected_active, true)) {
+         diskann::cout << "Initialised new index for _mem_index_0 "
+                       << std::endl;
+       } else {
+         diskann::cout << "Failed to initialise new _mem_index_0" << std::endl;
+         //            return -1;
+       }
+     }
+     _active_index = 1 - _active_index;
+     _mem_points = 0;
+     expected_value = true;
+     _check_switch_index.compare_exchange_strong(expected_value, false);
 
      }
 
      save();
      //start timer
      diskann::Timer timer;
-     construct_index_merger();
-     merge();
-     destruct_index_merger();
+     // todo @lh put this part to a different thread
+// ******************************
+//     construct_index_merger();
+//     merge();
+//     destruct_index_merger();
+// ******************************
      diskann::cout << "Merge time : " << timer.elapsed()/1000 << " ms" << std::endl;
      //end timer
 
@@ -544,8 +562,8 @@ namespace diskann {
 	 if(_active_delete_set == 0)
 	 {
          std::vector<TagT> * del_vec = new std::vector<TagT>(_deletion_set_1.size());
-         
-		 size_t i = 0;
+
+         size_t i = 0;
 		 for(auto iter : _deletion_set_1)
          	{
                 (*del_vec)[i] = iter;
@@ -557,8 +575,8 @@ namespace diskann {
 	 else
 	 {
          std::vector<TagT> * del_vec = new std::vector<TagT>(_deletion_set_0.size());
-         
-		 size_t i = 0;
+
+         size_t i = 0;
 		 for(auto iter : _deletion_set_0)
          	{
                 (*del_vec)[i] = iter;
@@ -567,9 +585,8 @@ namespace diskann {
          _deleted_tags_vector.clear();
          _deleted_tags_vector.push_back(del_vec);
 	 }
-		 
      }
-    
+
  template<typename T, typename TagT>
     std::string MergeInsert<T,TagT>::ret_merge_prefix()
  {

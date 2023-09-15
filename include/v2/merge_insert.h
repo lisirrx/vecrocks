@@ -152,5 +152,8 @@ namespace diskann {
     std::string _disk_index_prefix_in;
     std::string _disk_index_prefix_out;
     std::string _deleted_tags_file;
+
+
+    bool _skip_disk_search = false;
   };
 };  // namespace diskann
