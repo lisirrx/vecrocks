@@ -93,3 +93,6 @@ target_link_libraries(test_stream_merge ${PROJECT_NAME} -ltcmalloc aio)
 
 add_executable(test_id_generator test_id_generator.cpp)
 target_link_libraries(test_id_generator ${PROJECT_NAME} -ltcmalloc aio)
+
+add_executable(test_vecrocks test_vecrocks.cpp)
+target_link_libraries(test_vecrocks ${PROJECT_NAME} -ltcmalloc aio)

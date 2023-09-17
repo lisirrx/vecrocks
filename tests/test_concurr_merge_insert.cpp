@@ -3,7 +3,7 @@
 
 #include "v2/index_merger.h"
 #include "v2/merge_insert.h"
-
+#include "vecrocks/vecrocks.h"
 #include <mutex>
 #include <numeric>
 #include <random>

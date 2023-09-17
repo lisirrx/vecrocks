@@ -37,7 +37,7 @@ namespace diskann {
    public:
     // constructor
     DISKANN_DLLEXPORT MergeInsert(
-        Parameters& parameters, size_t dim, const std::string mem_prefix,
+        Parameters* parameters, size_t dim, const std::string mem_prefix,
         const std::string disk_prefix_in, const std::string disk_prefix_out,
         Distance<T>* dist, diskann::Metric disk_metric, bool single_file_index,
         std::string working_folder);

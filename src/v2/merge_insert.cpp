@@ -58,7 +58,7 @@
 namespace diskann {
   template<typename T, typename TagT>
   MergeInsert<T, TagT>::MergeInsert(
-      Parameters& parameters, size_t dim, const std::string mem_prefix,
+      Parameters* parameters, size_t dim, const std::string mem_prefix,
       const std::string disk_prefix_in, const std::string disk_prefix_out,
       Distance<T>* dist, diskann::Metric dist_metric, bool single_file_index,
       std::string working_folder)
@@ -66,7 +66,7 @@ namespace diskann {
         _active_del_1(false), _clearing_index_0(false),
         _clearing_index_1(false), _switching_disk_prefixes(false),
         _check_switch_index(false), _check_switch_delete(false) {
-    _merge_th = parameters.Get<unsigned>("merge_th");
+    _merge_th = parameters->Get<unsigned>("merge_th");
     _single_file_index = single_file_index;
     this->_dist_metric = dist_metric;
     _mem_index_0 = std::make_shared<diskann::Index<T, TagT>>(
@@ -74,25 +74,25 @@ namespace diskann {
     _mem_index_1 = std::make_shared<diskann::Index<T, TagT>>(
         this->_dist_metric, dim, _merge_th * 2, 1, _single_file_index, 1);
 
-    _paras_mem.Set<unsigned>("L", parameters.Get<unsigned>("L_mem"));
-    _paras_mem.Set<unsigned>("R", parameters.Get<unsigned>("R_mem"));
-    _paras_mem.Set<unsigned>("C", parameters.Get<unsigned>("C"));
-    _paras_mem.Set<float>("alpha", parameters.Get<float>("alpha_mem"));
+    _paras_mem.Set<unsigned>("L", parameters->Get<unsigned>("L_mem"));
+    _paras_mem.Set<unsigned>("R", parameters->Get<unsigned>("R_mem"));
+    _paras_mem.Set<unsigned>("C", parameters->Get<unsigned>("C"));
+    _paras_mem.Set<float>("alpha", parameters->Get<float>("alpha_mem"));
     _paras_mem.Set<unsigned>("num_rnds", 2);
     _paras_mem.Set<bool>("saturate_graph", 0);
 
-    _paras_disk.Set<unsigned>("L", parameters.Get<unsigned>("L_disk"));
-    _paras_disk.Set<unsigned>("R", parameters.Get<unsigned>("R_disk"));
-    _paras_disk.Set<unsigned>("C", parameters.Get<unsigned>("C"));
-    _paras_disk.Set<float>("alpha", parameters.Get<float>("alpha_disk"));
+    _paras_disk.Set<unsigned>("L", parameters->Get<unsigned>("L_disk"));
+    _paras_disk.Set<unsigned>("R", parameters->Get<unsigned>("R_disk"));
+    _paras_disk.Set<unsigned>("C", parameters->Get<unsigned>("C"));
+    _paras_disk.Set<float>("alpha", parameters->Get<float>("alpha_disk"));
     _paras_disk.Set<unsigned>("num_rnds", 2);
     _paras_disk.Set<bool>("saturate_graph", 0);
 
-    _skip_disk_search = parameters.Get<bool>("skip_disk_search");
+    _skip_disk_search = parameters->Get<bool>("skip_disk_search");
 
-    _num_search_threads = parameters.Get<_u32>("num_search_threads");
-    _beamwidth = parameters.Get<uint32_t>("beamwidth");
-    _num_nodes_to_cache = parameters.Get<_u32>("nodes_to_cache");
+    _num_search_threads = parameters->Get<_u32>("num_search_threads");
+    _beamwidth = parameters->Get<uint32_t>("beamwidth");
+    _num_nodes_to_cache = parameters->Get<_u32>("nodes_to_cache");
 
     _search_tpool = new ThreadPool(_num_search_threads);
 

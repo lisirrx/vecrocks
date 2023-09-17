@@ -54,7 +54,7 @@ namespace Vecrocks {
     unsigned dim;
 
     // mem index
-    unsigned max_record;
+    unsigned max_record = 18000000;
 
     bool skip_disk_search;
 
