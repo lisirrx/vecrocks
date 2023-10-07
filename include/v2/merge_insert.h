@@ -27,7 +27,7 @@
 #include "threadpool.h"
 
 #include "windows_customizations.h"
-
+#include "rocksdb/db.h"
 #define MERGE_TH 18000000
 
 namespace diskann {
@@ -59,7 +59,7 @@ namespace diskann {
 
     // continuously runs in background to check if mem index size has exceeded
     // its threshold - triggers index switch and merge
-    DISKANN_DLLEXPORT int trigger_merge();
+    DISKANN_DLLEXPORT int trigger_flush();
 
     DISKANN_DLLEXPORT void final_merge();
 
@@ -154,6 +154,10 @@ namespace diskann {
     std::string _deleted_tags_file;
 
 
+
     bool _skip_disk_search = false;
+
+
+    int  trigger_merge();
   };
 };  // namespace diskann

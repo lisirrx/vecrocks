@@ -17,6 +17,8 @@
 #include "pq_table.h"
 #include "utils.h"
 #include "windows_customizations.h"
+#include "rocksdb/db.h"
+#include "vecrocks/kv.h"
 
 #define MAX_N_CMPS 16384
 #define SECTOR_LEN 4096
@@ -82,7 +84,7 @@ namespace diskann {
     // reader object is now the client's (DiskANNInterface's) responsibility.
     DISKANN_DLLEXPORT PQFlashIndex(
         diskann::Metric m, std::shared_ptr<AlignedFileReader> &fileReader,
-        bool single_file_index, bool tags = false);
+        bool single_file_index, bool tags = false, Vecrocks::KvWrapper* kv = nullptr);
 
     DISKANN_DLLEXPORT ~PQFlashIndex();
 
@@ -214,6 +216,9 @@ namespace diskann {
     // nbrs of node `i`: ((unsigned*)buf) + 1
     _u64 max_node_len = 0, nnodes_per_sector = 0, max_degree = 0;
 
+    bool useKv(){
+      return kv != nullptr;
+    }
    protected:
     DISKANN_DLLEXPORT void use_medoids_data_as_centroids();
     DISKANN_DLLEXPORT void setup_thread_data(_u64 nthreads);
@@ -290,6 +295,8 @@ namespace diskann {
     // ids that don't have disk nhoods, but have in-mem PQ
     tsl::robin_set<_u32> invalid_ids;
     std::mutex           invalid_ids_lock;
+
+    Vecrocks::KvWrapper* kv;
 
 // tags
 #ifdef EXEC_ENV_OLS

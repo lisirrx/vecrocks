@@ -37,15 +37,19 @@ namespace Vecrocks {
 
    private:
 
-    void _start_merge_thread(std::chrono::milliseconds check_interval);
 
     Vecrocks::IdGenerator<TagT> *_id_generator;
 
     float _candidate_list_size_factor;
     diskann::MergeInsert<T, TagT> *_merge_insert_index;
 
+    std::atomic_bool _flush_thread_running;
+    std::thread *_flush_thread;
+    void _start_flush_thread(std::chrono::milliseconds check_interval);
+
     std::atomic_bool _merge_thread_running;
     std::thread *_merge_thread;
+    void _start_merge_thread(std::chrono::milliseconds check_interval);
   };
 
 }

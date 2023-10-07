@@ -258,7 +258,7 @@ void search_kernel(diskann::MergeInsert<T>        &merge_insert,
   float    *gt_dists = nullptr;
   size_t    query_num, query_dim, query_aligned_dim, gt_num, gt_dim;
 
-  const std::string temp = "/mnt/t-adisin/sift_query.bin";
+  const std::string temp = "/home/dongdong/code/vecrocks-freshdiskann/siftsmall/siftsmall_query.bin";
   std::cout << "Loading query : " << temp << std::endl;
   // load query + truthset
   diskann::load_aligned_bin<T>(temp, query, query_num, query_dim,
@@ -443,9 +443,6 @@ void run_iter(diskann::MergeInsert<T>  &merge_insert,
   std::string mem_tags_file = mem_prefix + ".tags_orig";
   std::this_thread::sleep_for(std::chrono::seconds(10));
 
-  ::merge_future =
-      std::async(std::launch::async, merge_kernel<T>, std::ref(merge_insert));
-
   while (!(::_insertions_done.load() && ::_del_done.load())) {
     std::cout << "Search at " << ::global_timer.elapsed() / 1000000
               << " seconds " << std::endl;
@@ -475,6 +472,11 @@ void run_iter(diskann::MergeInsert<T>  &merge_insert,
                    std::ref(merge_insert), mem_pts_file, mem_tags_file);
   }
 
+  insert_future.wait();
+  delete_future.wait();
+  ::merge_future =
+        std::async(std::launch::async, merge_kernel<T>, std::ref(merge_insert));
+
   std::future_status merge_status;
   do {
     merge_status = ::merge_future.wait_for(std::chrono::milliseconds(1));
@@ -483,7 +485,10 @@ void run_iter(diskann::MergeInsert<T>  &merge_insert,
     search_kernel<T>(merge_insert, active_set);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-  } while ((merge_status != std::future_status::ready));
+  } while (1);
+//  } while ((merge_status != std::future_status::ready));
+
+
 }
 
 template<typename T, typename TagT = uint32_t>
@@ -620,11 +625,13 @@ void run_all_iters(std::string base_prefix, std::string merge_prefix,
                       params[std::string("disk_search_node_cache_count")]);
   paras.Set<unsigned>("num_search_threads",
                       params[std::string("disk_search_nthreads")]);
+  paras.Set<unsigned>("merge_th", 10000);
+  paras.Set<bool>("skip_disk_search", false);
 
   const std::string             working_folder = ::TMP_FOLDER;
   diskann::Metric               metric = diskann::Metric::L2;
   diskann::MergeInsert<T, TagT> merge_insert(
-      paras, ndims, mem_prefix, base_prefix, merge_prefix, dist_cmp, metric,
+      &paras, ndims, mem_prefix, base_prefix, merge_prefix, dist_cmp, metric,
       ::save_index_as_one_file, working_folder);
   //  search_kernel<T, TagT>(merge_insert, active_tags, true);
   for (size_t i = 0; i < n_iters; i++) {

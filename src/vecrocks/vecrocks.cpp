@@ -66,13 +66,13 @@ namespace Vecrocks {
   }
 
   template<typename T, typename TagT>
-  void DB<T, TagT>::_start_merge_thread(std::chrono::milliseconds check_interval) {
+  void DB<T, TagT>::_start_flush_thread(std::chrono::milliseconds check_interval) {
     std::thread *merge_trigger = new std::thread([&](){
       while (1){
         if (!this->_merge_thread_running.load()){
           return ;
         }
-        this->_merge_insert_index->trigger_merge();
+        this->_merge_insert_index->trigger_flush();
         std::this_thread::sleep_for(check_interval);
       }
     });

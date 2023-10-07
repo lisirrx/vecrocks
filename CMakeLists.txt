@@ -4,9 +4,10 @@
 if(MSVC)
 	cmake_minimum_required(VERSION 3.15)
 else()
-	cmake_minimum_required(VERSION 2.8)
+	cmake_minimum_required(VERSION 3.15)
 endif()
 set(CMAKE_STANDARD 17)
+set(CMAKE_CXX_STANDARD 17)
 
 
 #set(CMAKE_USER_MAKE_RULES_OVERRIDE "${CMAKE_CURRENT_LIST_DIR}/CompilerOptions.cmake")
@@ -15,10 +16,13 @@ if(MSVC)
 	set(CMAKE_CXX_LINK_EXECUTABLE $ENV{VCToolsInstallDir}/bin/Hostx64/x64/link.exe)
 else()
 	set(CMAKE_CXX_COMPILER g++)
+
 endif()
 
 project(diskann)
-include_directories(${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/include/tsl/include ${PROJECT_SOURCE_DIR}/include/dll ${PROJECT_SOURCE_DIR}/include/ols)
+include(cmake/rocksdb.cmake)
+include(cmake/json.cmake)
+include_directories(${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/include/tsl/include ${PROJECT_SOURCE_DIR}/include/dll ${PROJECT_SOURCE_DIR}/include/ols ${rocksdb_SOURCE_DIR}/include ${json_SOURCE_DIR/include})
 
 #OpenMP
 find_package(OpenMP)
@@ -97,6 +101,8 @@ else()
 	set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Ofast -DNDEBUG -march=native -mtune=native -ftree-vectorize")
 	add_compile_options(-march=native -Wall -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free -fopenmp -fopenmp-simd -funroll-loops -Wfatal-errors -DUSE_ACCELERATED_PQ -DUSE_AVX2)
 endif()
+
+
 
 add_subdirectory(src)
 add_subdirectory(tests)

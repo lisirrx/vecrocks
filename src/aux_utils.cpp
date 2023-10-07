@@ -24,15 +24,18 @@
 #include "pq_flash_index.h"
 #include "tsl/robin_set.h"
 #include "utils.h"
+#include "nlohmann/json.hpp"
 
 #define NUM_KMEANS 15
 
 namespace diskann {
+  using json = nlohmann::json;
 
   void add_new_file_to_single_index(std::string index_file,
                                     std::string new_file) {
     std::unique_ptr<_u64[]> metadata;
     _u64                    nr, nc;
+    // first sector was preserved
     diskann::load_bin<_u64>(index_file, metadata, nr, nc, 0);
     if (nc != 1) {
       std::stringstream stream;
@@ -643,6 +646,23 @@ namespace diskann {
     return best_bw;
   }
 
+  template<typename T>
+  void write_nodes(cached_ifstream &base_reader, std::ifstream &vamana_reader,
+                   size_t npts_64, size_t ndims_64,
+                   cached_ofstream &diskann_writer, unsigned int width_u32,
+                   _u64 max_node_len, _u64 nnodes_per_sector,
+                   const std::unique_ptr<char[]> &sector_buf,
+                   const std::unique_ptr<char[]> &node_buf, unsigned int &nnbrs,
+                   const unsigned int *nhood_buf, _u64 n_sectors);
+  template<typename T>
+  void write_nodes_kv(cached_ifstream &base_reader, std::ifstream &vamana_reader,
+                   size_t npts_64, size_t ndims_64,
+                   cached_ofstream &diskann_writer, unsigned int width_u32,
+                   _u64 max_node_len, _u64 nnodes_per_sector,
+                   const std::unique_ptr<char[]> &sector_buf,
+                   const std::unique_ptr<char[]> &node_buf, unsigned int &nnbrs,
+                   const unsigned int *nhood_buf, _u64 n_sectors, Vecrocks::KvWrapper* kv);
+
   // if single_index format is true, we assume that the entire mem index is in
   // mem_index_file, and the entire disk index will be in output_file.
   template<typename T, typename TagT>
@@ -654,6 +674,9 @@ namespace diskann {
                           bool               single_file_index,
                           const std::string &output_file) {
     unsigned npts, ndims;
+    auto kv = new Vecrocks::MemoryKv();
+    bool useKv = std::string(std::getenv("USE_KV")) == "true";
+
 
     // amount to read or write in one shot
     _u64            read_blk_size = 64 * 1024 * 1024;
@@ -748,71 +771,29 @@ namespace diskann {
     output_file_meta.push_back(vamana_frozen_num);
     output_file_meta.push_back(vamana_frozen_loc);
     output_file_meta.push_back(disk_index_file_size);
+    if (!useKv) {
+      diskann_writer.write(sector_buf.get(), SECTOR_LEN);  // write out the empty
+                                                           // first sector, will
+                                                           // be populated at the
+                                                           // end.
+    }
 
-    diskann_writer.write(sector_buf.get(), SECTOR_LEN);  // write out the empty
-                                                         // first sector, will
-                                                         // be populated at the
-                                                         // end.
-
-    std::unique_ptr<T[]> cur_node_coords = std::make_unique<T[]>(ndims_64);
-    diskann::cout << "# sectors: " << n_sectors << std::endl;
-    _u64 cur_node_id = 0;
-    for (_u64 sector = 0; sector < n_sectors; sector++) {
-      if (sector % 100000 == 0) {
-        diskann::cout << "Sector #" << sector << "written" << std::endl;
-      }
-      memset(sector_buf.get(), 0, SECTOR_LEN);
-      for (_u64 sector_node_id = 0;
-           sector_node_id < nnodes_per_sector && cur_node_id < npts_64;
-           sector_node_id++) {
-        memset(node_buf.get(), 0, max_node_len);
-        // read cur node's nnbrs
-        vamana_reader.read((char *) &nnbrs, sizeof(unsigned));
-
-        // sanity checks on nnbrs
-        if (nnbrs == 0) {
-          diskann::cout << "ERROR. Found point with no out-neighbors; Point#: "
-                        << cur_node_id << std::endl;
-          exit(-1);
-        }
-
-        // read node's nhood
-        vamana_reader.read((char *) nhood_buf,
-                           (std::min)(nnbrs, width_u32) * sizeof(unsigned));
-        if (nnbrs > width_u32) {
-          vamana_reader.seekg((nnbrs - width_u32) * sizeof(unsigned),
-                              vamana_reader.cur);
-        }
-
-        // write coords of node first
-        //  T *node_coords = data + ((_u64) ndims_64 * cur_node_id);
-        base_reader.read((char *) cur_node_coords.get(), sizeof(T) * ndims_64);
-        memcpy(node_buf.get(), cur_node_coords.get(), ndims_64 * sizeof(T));
-
-        // write nnbrs
-        *(unsigned *) (node_buf.get() + ndims_64 * sizeof(T)) =
-            (std::min)(nnbrs, width_u32);
-
-        // write nhood next
-        memcpy(node_buf.get() + ndims_64 * sizeof(T) + sizeof(unsigned),
-               nhood_buf, (std::min)(nnbrs, width_u32) * sizeof(unsigned));
-
-        // get offset into sector_buf
-        char *sector_node_buf =
-            sector_buf.get() + (sector_node_id * max_node_len);
-
-        // copy node buf into sector_node_buf
-        memcpy(sector_node_buf, node_buf.get(), max_node_len);
-        cur_node_id++;
-      }
-      // flush sector to disk
-      diskann_writer.write(sector_buf.get(), SECTOR_LEN);
+    if (!useKv) {
+      write_nodes<T>(base_reader, vamana_reader, npts_64, ndims_64,
+                     diskann_writer, width_u32, max_node_len, nnodes_per_sector,
+                     sector_buf, node_buf, nnbrs, nhood_buf, n_sectors);
+    } else {
+      write_nodes_kv<T>(base_reader, vamana_reader, npts_64, ndims_64,
+                        diskann_writer, width_u32, max_node_len, nnodes_per_sector,
+                        sector_buf, node_buf, nnbrs, nhood_buf, n_sectors, kv);
     }
     diskann_writer.close();
+
     size_t tag_bytes_written = 0;
 
     // frozen point implies dynamic index which must have tags
     if (vamana_frozen_num > 0) {
+      // skip
       std::unique_ptr<TagT[]> mem_index_tags;
       size_t                  nr, nc;
       if (single_file_index)
@@ -880,14 +861,156 @@ namespace diskann {
 
     output_file_meta.push_back(output_file_meta[output_file_meta.size() - 1] +
                                tag_bytes_written);
-    diskann::save_bin<_u64>(output_file, output_file_meta.data(),
-                            output_file_meta.size(), 1, 0);
 
-    if (single_file_index) {
-      add_new_file_to_single_index(output_file, pq_pivots_file);
-      add_new_file_to_single_index(output_file, pq_vectors_file);
+    // save meta
+    if (!useKv) {
+      // write in the first sector
+      diskann::save_bin<_u64>(output_file, output_file_meta.data(),
+                              output_file_meta.size(), 1, 0);
+    } else {
+      json value(output_file_meta);
+      kv->put("output_file_meta", value.dump());
+      kv->printAll();
     }
+
+    if (useKv) {
+      std::ofstream o(output_file);
+      json kv_json(*kv->_map);
+      o << std::setw(4) << kv_json << std::endl;    // todo @lh pq data
+    } else {
+        if (single_file_index) {
+          add_new_file_to_single_index(output_file, pq_pivots_file);
+          add_new_file_to_single_index(output_file, pq_vectors_file);
+        }
+    }
+
+
     diskann::cout << "Output file written." << std::endl;
+  }
+
+  template<typename T>
+  void write_nodes(cached_ifstream &base_reader, std::ifstream &vamana_reader,
+                   size_t npts_64, size_t ndims_64,
+                   cached_ofstream &diskann_writer, unsigned int width_u32,
+                   _u64 max_node_len, _u64 nnodes_per_sector,
+                   const std::unique_ptr<char[]> &sector_buf,
+                   const std::unique_ptr<char[]> &node_buf, unsigned int &nnbrs,
+                   const unsigned int *nhood_buf, _u64 n_sectors) {
+    std::unique_ptr<T[]> cur_node_coords = std::make_unique<T[]>(ndims_64);
+    cout << "# sectors: " << n_sectors << std::endl;
+    _u64 cur_node_id = 0;
+    for (_u64 sector = 0; sector < n_sectors; sector++) {
+      if (sector % 100000 == 0) {
+        cout << "Sector #" << sector << "written" << std::endl;
+      }
+      memset(sector_buf.get(), 0, SECTOR_LEN);
+      for (_u64 sector_node_id = 0;
+           sector_node_id < nnodes_per_sector && cur_node_id < npts_64;
+           sector_node_id++) {
+        memset(node_buf.get(), 0, max_node_len);
+        // read cur node's nnbrs
+        vamana_reader.read((char *) &nnbrs, sizeof(unsigned));
+
+        // sanity checks on nnbrs
+        if (nnbrs == 0) {
+          cout << "ERROR. Found point with no out-neighbors; Point#: "
+                        << cur_node_id << std::endl;
+          exit(-1);
+        }
+
+        // read node's nhood
+        vamana_reader.read((char *) nhood_buf,
+                           (std::min)(nnbrs, width_u32) * sizeof(unsigned));
+        if (nnbrs > width_u32) {
+          vamana_reader.seekg((nnbrs - width_u32) * sizeof(unsigned),
+                              vamana_reader.cur);
+        }
+
+        // write coords of node first
+        //  T *node_coords = data + ((_u64) ndims_64 * cur_node_id);
+        base_reader.read((char *) cur_node_coords.get(), sizeof(T) * ndims_64);
+        memcpy(node_buf.get(), cur_node_coords.get(), ndims_64 * sizeof(T));
+
+        // write nnbrs
+        *(unsigned *) (node_buf.get() + ndims_64 * sizeof(T)) =
+            (std::min)(nnbrs, width_u32);
+
+        // write nhood next
+        memcpy(node_buf.get() + ndims_64 * sizeof(T) + sizeof(unsigned),
+               nhood_buf, (std::min)(nnbrs, width_u32) * sizeof(unsigned));
+
+        // get offset into sector_buf
+        char *sector_node_buf =
+            sector_buf.get() + (sector_node_id * max_node_len);
+
+        // copy node buf into sector_node_buf
+        memcpy(sector_node_buf, node_buf.get(), max_node_len);
+        cur_node_id++;
+      }
+      // flush sector to disk
+      diskann_writer.write(sector_buf.get(), SECTOR_LEN);
+    }
+  }
+
+  template<typename T>
+  void write_nodes_kv(cached_ifstream &base_reader, std::ifstream &vamana_reader,
+                   size_t npts_64, size_t ndims_64,
+                   cached_ofstream &diskann_writer, unsigned int width_u32,
+                   _u64 max_node_len, _u64 nnodes_per_sector,
+                   const std::unique_ptr<char[]> &sector_buf,
+                   const std::unique_ptr<char[]> &node_buf, unsigned int &nnbrs,
+                   const unsigned int *nhood_buf, _u64 n_sectors, Vecrocks::KvWrapper* kv) {
+    std::unique_ptr<T[]> cur_node_coords = std::make_unique<T[]>(ndims_64);
+
+    _u64 cur_node_id = 0;
+    for (_u64 sector = 0; sector < n_sectors; sector++) {
+      if (sector % 100000 == 0) {
+        cout << "Sector #" << sector << "written" << std::endl;
+      }
+      memset(sector_buf.get(), 0, SECTOR_LEN);
+      for (_u64 sector_node_id = 0;
+           sector_node_id < nnodes_per_sector && cur_node_id < npts_64;
+           sector_node_id++) {
+        memset(node_buf.get(), 0, max_node_len);
+        // read cur node's nnbrs
+        vamana_reader.read((char *) &nnbrs, sizeof(unsigned));
+
+        // sanity checks on nnbrs
+        if (nnbrs == 0) {
+          cout << "ERROR. Found point with no out-neighbors; Point#: "
+               << cur_node_id << std::endl;
+          exit(-1);
+        }
+
+        // read node's nhood
+        vamana_reader.read((char *) nhood_buf,
+                           (std::min)(nnbrs, width_u32) * sizeof(unsigned));
+        if (nnbrs > width_u32) {
+          vamana_reader.seekg((nnbrs - width_u32) * sizeof(unsigned),
+                              vamana_reader.cur);
+        }
+
+        // write coords of node first
+        //  T *node_coords = data + ((_u64) ndims_64 * cur_node_id);
+        base_reader.read((char *) cur_node_coords.get(), sizeof(T) * ndims_64);
+        // convert cur_node_coords to a vector
+
+
+        std::vector<T> coords_vector = std::vector<T>(cur_node_coords.get(), cur_node_coords.get() + ndims_64);
+        json data(coords_vector);
+        kv->put("node_" + std::to_string(cur_node_id), data.dump());
+
+        // write nnbrs
+        kv->put("edge_" + std::to_string(cur_node_id) + "_meta", std::to_string((std::min)(nnbrs, width_u32)));
+
+        // write nhood next
+        for (size_t i = 0; i < nnbrs; ++i) {
+          kv->put("edge_" + std::to_string(cur_node_id) + "_" + std::to_string(nhood_buf[i]), "");
+        }
+        cur_node_id++;
+      }
+      // flush sector to disk
+    }
   }
 
   template<typename T, typename TagT>
@@ -1005,6 +1128,7 @@ namespace diskann {
     diskann::cout << "Generating PQ pivots with training data of size: "
                   << train_size << " num PQ chunks: " << num_pq_chunks
                   << std::endl;
+    // this will write pq_pivots in file
     generate_pq_pivots(train_data, train_size, (uint32_t) dim, 256,
                        (uint32_t) num_pq_chunks, NUM_KMEANS, pq_pivots_path);
     auto end = std::chrono::high_resolution_clock::now();

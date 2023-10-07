@@ -118,22 +118,23 @@ namespace diskann {
     std::string disk_index_file = _disk_index_prefix_in + "_disk.index";
     // todo @lh load disk
 
-    //    int         res =
-    //        _disk_index->load(_disk_index_prefix_in.c_str(),
-    //        _num_search_threads);
-    //    if (res != 0) {
-    //      diskann::cout << "Failed to load disk index in MergeInsert
-    //      constructor"
-    //                    << std::endl;
-    //      exit(-1);
-    //    }
+        int         res =
+            _disk_index->load(_disk_index_prefix_in.c_str(),
+            _num_search_threads);
+        if (res != 0) {
+          diskann::cout << "Failed to load disk index in MergeInsert constructor"
+                        << std::endl;
+          exit(-1);
+        }
 
     TMP_FOLDER = working_folder;
     std::cout << "TMP_FOLDER inside MergeInsert : " << TMP_FOLDER << std::endl;
+
   }
 
   template<typename T, typename TagT>
   MergeInsert<T, TagT>::~MergeInsert() {
+    diskann::cout << "MergeInsert deconstructed" << std::endl;
     // put in destructor code
   }
 
@@ -179,6 +180,9 @@ namespace diskann {
          {
              if(_mem_index_0->get_num_points() < _mem_index_0->return_max_points())
              {
+                if(_paras_mem.empty()){
+                   diskann::cout << "_paras_mem is empty " << tag << std::endl;
+                }
                  if(_mem_index_0->insert_point(point, _paras_mem, tag) != 0)
                  {
                      diskann::cout << "Could not insert point with tag " << tag << std::endl;
@@ -321,7 +325,7 @@ namespace diskann {
     }
 
  template<typename T, typename TagT>
- int MergeInsert<T,TagT>::trigger_merge()
+ int MergeInsert<T,TagT>::trigger_flush()
  {
      if(_mem_points >= _merge_th)
      {
@@ -329,6 +333,19 @@ namespace diskann {
          switch_index();
          return 1;
      }
+     return 0;
+ }
+
+ template<typename T, typename TagT>
+ int MergeInsert<T,TagT>::trigger_merge()
+ {
+     diskann::Timer timer;
+     // todo @lh put this part to a different thread
+      construct_index_merger();
+      merge();
+      destruct_index_merger();
+     diskann::cout << "Merge time : " << timer.elapsed()/1000 << " ms" << std::endl;
+     //end timer
      return 0;
  }
 
@@ -436,9 +453,9 @@ namespace diskann {
      diskann::Timer timer;
      // todo @lh put this part to a different thread
 // ******************************
-//     construct_index_merger();
-//     merge();
-//     destruct_index_merger();
+     construct_index_merger();
+     merge();
+     destruct_index_merger();
 // ******************************
      diskann::cout << "Merge time : " << timer.elapsed()/1000 << " ms" << std::endl;
      //end timer

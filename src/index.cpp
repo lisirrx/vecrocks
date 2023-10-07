@@ -838,8 +838,9 @@ namespace diskann {
     pruned_list.clear();
     assert(result.size() <= range);
     for (auto iter : result) {
-      if (iter.id != location)
+      if (iter.id != location) {
         pruned_list.emplace_back(iter.id);
+      }
     }
 
     if (_saturate_graph && alpha > 1) {
@@ -1071,7 +1072,7 @@ namespace diskann {
       size_t round_size = DIV_ROUND_UP(_nd, NUM_SYNCS);  // size of each batch
       std::vector<unsigned> need_to_sync(_max_points + _num_frozen_pts, 0);
 
-      std::vector<std::vector<unsigned>> pruned_list_vector(round_size);
+      std::vector<std::vector<unsigned>> pruned_list_vector(round_size, std::vector<unsigned>{});
 
       for (uint32_t sync_num = 0; sync_num < NUM_SYNCS; sync_num++) {
         size_t start_id = sync_num * round_size;

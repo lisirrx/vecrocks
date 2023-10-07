@@ -361,3 +361,6 @@ cscope*
 .vscode
 cmake-build-debug
 build
+
+gperftools/
+siftsmall/

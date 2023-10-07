@@ -104,9 +104,9 @@ namespace diskann {
   template<typename T, typename TagT>
   PQFlashIndex<T, TagT>::PQFlashIndex(
       diskann::Metric m, std::shared_ptr<AlignedFileReader> &fileReader,
-      bool single_file_index, bool tags)
+      bool single_file_index, bool tags, Vecrocks::KvWrapper* kv)
       : reader(fileReader), data_is_normalized(false),
-        single_index_file(single_file_index), enable_tags(tags) {
+        single_index_file(single_file_index), enable_tags(tags), kv(kv) {
     if (m == diskann::Metric::COSINE) {
       if (std::is_floating_point<T>::value) {
         diskann::cout << "Cosine metric chosen for (normalized) float data."
@@ -166,6 +166,7 @@ namespace diskann {
 #ifdef USE_TCMALLOC
     MallocExtension::instance()->ReleaseFreeMemory();
 #endif
+    delete kv;
   }
 
   template<typename T, typename TagT>
@@ -232,6 +233,8 @@ namespace diskann {
     this->reader->deregister_all_threads();
   }
 
+  // used after cache_bfs_levels, cache_bfs_levels will fill the node_list, then
+  // use this function to fill it.
   template<typename T, typename TagT>
   void PQFlashIndex<T, TagT>::load_cache_list(
       std::vector<uint32_t> &node_list) {
@@ -246,6 +249,7 @@ namespace diskann {
     }
     IOContext &ctx = this_thread_data.ctx;
 
+    // todo why max_degree + 1
     nhood_cache_buf = new unsigned[num_cached_nodes * (max_degree + 1)];
     memset(nhood_cache_buf, 0, num_cached_nodes * (max_degree + 1));
 
@@ -260,6 +264,7 @@ namespace diskann {
     for (_u64 block = 0; block < num_blocks; block++) {
       _u64 start_idx = block * BLOCK_SIZE;
       _u64 end_idx = (std::min)(num_cached_nodes, (block + 1) * BLOCK_SIZE);
+      // todo @lh change this part to kv
       std::vector<AlignedRead>             read_reqs;
       std::vector<std::pair<_u32, char *>> nhoods;
       for (_u64 node_idx = start_idx; node_idx < end_idx; node_idx++) {
@@ -273,8 +278,10 @@ namespace diskann {
         read_reqs.push_back(read);
       }
 
+//      todo @lh kv
       reader->read(read_reqs, ctx);
 
+      // load from buf to ids
       _u64 node_idx = start_idx;
       for (auto &nhood : nhoods) {
         char *node_buf = OFFSET_TO_NODE(nhood.second, nhood.first);
@@ -368,6 +375,8 @@ namespace diskann {
     diskann::aligned_free(samples);
   }
 
+
+  // cache part of points, eg. 1%
   template<typename T, typename TagT>
   void PQFlashIndex<T, TagT>::cache_bfs_levels(
       _u64 num_nodes_to_cache, std::vector<uint32_t> &node_list) {
@@ -401,6 +410,7 @@ namespace diskann {
     cur_level = std::make_unique<tsl::robin_set<unsigned>>();
     prev_level = std::make_unique<tsl::robin_set<unsigned>>();
 
+    // start from medoids
     for (_u64 miter = 0; miter < num_medoids; miter++) {
       cur_level->insert(medoids[miter]);
     }
@@ -417,6 +427,7 @@ namespace diskann {
       std::vector<unsigned> nodes_to_expand;
 
       for (const unsigned &id : *prev_level) {
+        // if id exist, skip
         if (std::find(node_list.begin(), node_list.end(), id) !=
             node_list.end()) {
           continue;
@@ -431,6 +442,7 @@ namespace diskann {
       diskann::cout << "Level: " << lvl << std::flush;
       bool finish_flag = false;
 
+      // read from disk
       uint64_t BLOCK_SIZE = 1024;
       uint64_t nblocks = DIV_ROUND_UP(nodes_to_expand.size(), BLOCK_SIZE);
       for (size_t block = 0; block < nblocks && !finish_flag; block++) {
@@ -451,6 +463,7 @@ namespace diskann {
           read_reqs.push_back(read);
         }
 
+//        todo @lh kv
         // issue read requests
         reader->read(read_reqs, ctx);
 
@@ -480,6 +493,7 @@ namespace diskann {
       prev_node_list_size = node_list.size();
       lvl++;
     }
+
 
     std::vector<uint32_t> cur_level_node_list;
     for (const unsigned &p : *cur_level)
@@ -574,7 +588,7 @@ namespace diskann {
       // a result of merging multiple indices, we won't have medoids
       // or centroids file (or medoids/centroid data stored in disk_index_file).
       pq_table_bin = pq_compressed_vectors = disk_index_file =
-          std::string(index_prefix);
+          std::string(index_prefix) + "_disk.index" ;
       this->_disk_index_file = disk_index_file;
     }
 

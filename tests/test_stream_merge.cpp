@@ -23,9 +23,11 @@ int main() {
         paras.Set<unsigned>("nodes_to_cache", 10);
         paras.Set<unsigned>("num_search_threads", 2);
         paras.Set<bool>("skip_disk_search", true);
+        paras.Set<unsigned>("merge_th", 1);
+
 
         diskann::MergeInsert<float, uint32_t> merge_insert(
-            paras, 2, "mem_prefix", "base_prefix", "merge_prefix", &dist_cmp,
+            &paras, 2, "mem_prefix", "base_prefix", "merge_prefix", &dist_cmp,
             metric, true, "./working");
 
         float a[2] {1.0, 0.0};
@@ -33,6 +35,7 @@ int main() {
         merge_insert.insert(a, 1);
         merge_insert.insert(b, 2);
 
+        merge_insert.trigger_flush();
         float q[2] {0.0, 0.0};
         uint32_t tag[10];
         float distance[10];

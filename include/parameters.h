@@ -32,7 +32,7 @@ namespace diskann {
     inline ParamType Get(const std::string &name) const {
       auto item = params.find(name);
       if (item == params.end()) {
-        throw std::invalid_argument("Invalid parameter name.");
+        throw std::invalid_argument("Invalid parameter name." + name);
       } else {
         // return ConvertStrToValue<ParamType>(item->second);
         if (item->second == nullptr) {
@@ -54,7 +54,12 @@ namespace diskann {
       }
     }
 
+    bool empty(){
+      return params.empty();
+    }
+
     ~Parameters() {
+      diskann::cout << "Parameters destructor called" << std::endl;
       for (auto iter = params.begin(); iter != params.end(); iter++) {
         if (iter->second != nullptr)
           free(iter->second);

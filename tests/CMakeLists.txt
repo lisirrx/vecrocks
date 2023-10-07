@@ -36,11 +36,10 @@ if(MSVC)
 	target_link_libraries(build_disk_index debug ${CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG}/diskann_dll.lib ${PROJECT_SOURCE_DIR}/dependencies/windows/tcmalloc/libtcmalloc_minimal.lib)
 	target_link_libraries(build_disk_index optimized ${CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE}/diskann_dll.lib ${PROJECT_SOURCE_DIR}/dependencies/windows/tcmalloc/libtcmalloc_minimal.lib)
 else() 
-	target_link_libraries(build_disk_index ${PROJECT_NAME} -ltcmalloc aio)
+	target_link_libraries(build_disk_index ${PROJECT_NAME}  aio)
 endif()
 
-add_executable(search_disk_index search_disk_index.cpp
-    ${PROJECT_SOURCE_DIR}/src/aux_utils.cpp )
+add_executable(search_disk_index search_disk_index.cpp)
 if(MSVC)
 	target_link_options(search_disk_index PRIVATE /MACHINE:x64 /DEBUG:FULL)
 	target_link_libraries(search_disk_index debug ${CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG}/diskann_dll.lib)
@@ -49,7 +48,6 @@ else()
 	target_link_libraries(search_disk_index ${PROJECT_NAME} aio -ltcmalloc)
 endif()
 
-set(CMAKE_CXX_STANDARD 14)
 
 add_executable(test_concurr_merge_insert test_concurr_merge_insert.cpp)
 if(MSVC)
@@ -96,3 +94,10 @@ target_link_libraries(test_id_generator ${PROJECT_NAME} -ltcmalloc aio)
 
 add_executable(test_vecrocks test_vecrocks.cpp)
 target_link_libraries(test_vecrocks ${PROJECT_NAME} -ltcmalloc aio)
+
+add_executable(test_pq_flash_index test_pq_flash_index.cpp)
+target_link_libraries(test_pq_flash_index ${PROJECT_NAME} -ltcmalloc aio)
+
+add_executable(test_build_kv_disk_index test_build_kv_disk_index.cpp)
+target_link_libraries(test_build_kv_disk_index ${PROJECT_NAME} -ltcmalloc aio)
+
