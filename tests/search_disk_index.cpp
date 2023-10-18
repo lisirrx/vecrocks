@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "linux_aligned_file_reader.h"
+#include "nlohmann/json.hpp"
 #else
 #ifdef USE_BING_INFRA
 #include "bing_aligned_file_reader.h"
@@ -32,6 +33,7 @@
 #endif
 
 #define WARMUP true
+using json = nlohmann::json;
 
 void print_stats(std::string category, std::vector<float> percentiles,
                  std::vector<float> results) {
@@ -126,12 +128,29 @@ int search_disk_index(int argc, char** argv) {
   reader.reset(new LinuxAlignedFileReader());
 //  reader.reset(new diskann::MemAlignedFileReader());
 #endif
+  bool useKv = std::string(std::getenv("USE_KV")) == "true";
+  std::map<std::string, std::string>* map;
+  auto kv = new Vecrocks::MemoryKv();
+
+  if (useKv) {
+    std::ifstream json_file( std::string(index_prefix_path) + "_disk.index");
+    json j;
+    json_file >> j;
+    auto _map = j.get<std::map<std::string, std::string>>();
+    map = new std::map<std::string, std::string>(_map);
+    kv->_map.reset(map);
+  }
 
   std::unique_ptr<diskann::PQFlashIndex<T>> _pFlashIndex(
       new diskann::PQFlashIndex<T>(m, reader, single_file_index,
-                                   tags_flag));  // no tags support yet.
+                                   tags_flag, kv));  // no tags support yet.
+  int res;
+  if (useKv) {
+    res = _pFlashIndex->load_kv(index_prefix_path.c_str(), num_threads);
+  } else{
+    res = _pFlashIndex->load(index_prefix_path.c_str(), num_threads);
+  }
 
-  int res = _pFlashIndex->load(index_prefix_path.c_str(), num_threads);
   if (res != 0) {
     return res;
   }
@@ -150,10 +169,18 @@ int search_disk_index(int argc, char** argv) {
   std::vector<uint32_t> node_list;
   diskann::cout << "Caching " << num_nodes_to_cache
                 << " BFS nodes around medoid(s)" << std::endl;
-  _pFlashIndex->cache_bfs_levels(num_nodes_to_cache, node_list);
+  if (useKv) {
+    _pFlashIndex->cache_bfs_levels_kv(num_nodes_to_cache, node_list);
+  } else {
+    _pFlashIndex->cache_bfs_levels(num_nodes_to_cache, node_list);
+  }
   //_pFlashIndex->generate_cache_list_from_sample_queries(
   //   warmup_query_file, 15, 6, num_nodes_to_cache, num_threads, node_list);
-  _pFlashIndex->load_cache_list(node_list);
+  if (useKv) {
+    _pFlashIndex->load_cache_list_kv(node_list);
+  } else {
+    _pFlashIndex->load_cache_list(node_list);
+  }
   node_list.clear();
   node_list.shrink_to_fit();
 
@@ -243,9 +270,9 @@ int search_disk_index(int argc, char** argv) {
     auto                  s = std::chrono::high_resolution_clock::now();
 #pragma omp parallel for schedule(dynamic, 1)
     for (_s64 i = 0; i < (int64_t) query_num; i++) {
-      _pFlashIndex->cached_beam_search(
+      _pFlashIndex->cached_beam_search_ids(
           query + (i * query_aligned_dim), (uint64_t) recall_at, (uint64_t) L,
-          query_result_tags_32.data() + (i * recall_at),
+          query_result_tags_64.data() + (i * recall_at),
           query_result_dists[test_id].data() + (i * recall_at),
           (uint64_t) optimized_beamwidth, stats + i);
     }
@@ -254,8 +281,8 @@ int search_disk_index(int argc, char** argv) {
     float                         qps =
         (float) ((1.0 * (double) query_num) / (1.0 * (double) diff.count()));
 
-    diskann::convert_types<uint32_t, uint32_t>(
-        query_result_tags_32.data(), query_result_tags[test_id].data(),
+    diskann::convert_types<uint64_t, uint32_t>(
+        query_result_tags_64.data(), query_result_tags[test_id].data(),
         (size_t) query_num, (size_t) recall_at);
 
     float mean_latency = (float) diskann::get_mean_stats(

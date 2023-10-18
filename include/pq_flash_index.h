@@ -88,6 +88,8 @@ namespace diskann {
 
     DISKANN_DLLEXPORT ~PQFlashIndex();
 
+    DISKANN_DLLEXPORT int  load_kv(const char *index_prefix, uint32_t num_threads,
+                               bool new_index_format = true);
 #ifdef EXEC_ENV_OLS
     DISKANN_DLLEXPORT int load(const char *index_prefix, _u32 num_threads,
                                diskann::MemoryMappedFiles &files,
@@ -101,7 +103,7 @@ namespace diskann {
                                      size_t             offset = 0);
 
     DISKANN_DLLEXPORT void load_cache_list(std::vector<uint32_t> &node_list);
-
+    DISKANN_DLLEXPORT void load_cache_list_kv(std::vector<uint32_t> &node_list);
     DISKANN_DLLEXPORT _u64 return_nd();
 
 #ifdef EXEC_ENV_OLS
@@ -117,6 +119,8 @@ namespace diskann {
 #endif
 
     DISKANN_DLLEXPORT void cache_bfs_levels(_u64 num_nodes_to_cache,
+                                            std::vector<uint32_t> &node_list);
+    DISKANN_DLLEXPORT void cache_bfs_levels_kv(_u64 num_nodes_to_cache,
                                             std::vector<uint32_t> &node_list);
 
     //    DISKANN_DLLEXPORT void cache_from_samples(const std::string
@@ -153,6 +157,14 @@ namespace diskann {
         tsl::robin_map<uint32_t, T *> *coord_map = nullptr,
         QueryStats *stats = nullptr, ThreadData<T> *passthrough_data = nullptr,
         tsl::robin_set<uint32_t> *exclude_nodes = nullptr);
+    DISKANN_DLLEXPORT void disk_iterate_to_fixed_point_kv(
+        const T *vec, const uint32_t Lsize, const uint32_t beam_width,
+        std::vector<Neighbor> &        expanded_nodes_info,
+        tsl::robin_map<uint32_t, T *> *coord_map = nullptr,
+        QueryStats *stats = nullptr, ThreadData<T> *passthrough_data = nullptr,
+        tsl::robin_set<uint32_t> *exclude_nodes = nullptr);
+
+
     std::vector<uint32_t> get_init_ids() {
       return std::vector<uint32_t>(this->medoids,
                                    this->medoids + this->num_medoids);

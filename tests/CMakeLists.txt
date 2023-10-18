@@ -45,7 +45,9 @@ if(MSVC)
 	target_link_libraries(search_disk_index debug ${CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG}/diskann_dll.lib)
 	target_link_libraries(search_disk_index optimized ${CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE}/diskann_dll.lib)
 else() 
-	target_link_libraries(search_disk_index ${PROJECT_NAME} aio -ltcmalloc)
+	target_link_libraries(search_disk_index ${PROJECT_NAME} aio -ltcmalloc nlohmann_json::nlohmann_json)
+	target_include_directories(search_disk_index PRIVATE ${json_SOURCE_DIR}/include)
+
 endif()
 
 

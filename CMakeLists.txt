@@ -22,7 +22,8 @@ endif()
 project(diskann)
 include(cmake/rocksdb.cmake)
 include(cmake/json.cmake)
-include_directories(${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/include/tsl/include ${PROJECT_SOURCE_DIR}/include/dll ${PROJECT_SOURCE_DIR}/include/ols ${rocksdb_SOURCE_DIR}/include ${json_SOURCE_DIR/include})
+include_directories(${PROJECT_SOURCE_DIR}/include ${PROJECT_SOURCE_DIR}/include/tsl/include
+		${PROJECT_SOURCE_DIR}/include/dll ${PROJECT_SOURCE_DIR}/include/ols ${rocksdb_SOURCE_DIR}/include ${json_SOURCE_DIR/include})
 
 #OpenMP
 find_package(OpenMP)
