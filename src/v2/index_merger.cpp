@@ -20,6 +20,7 @@
 #include <sys/syscall.h>
 #include "logger.h"
 #include "ann_exception.h"
+#include "nlohmann/json.hpp"
 
 #define SECTORS_PER_MERGE (uint64_t) 65536
 // max number of points per mem index being merged -- 32M
@@ -33,6 +34,7 @@
 #define PQ_FLASH_INDEX_MAX_NODES_TO_CACHE 200000
 
 namespace diskann {
+  using json = nlohmann::json;
   template<typename T, typename TagT>
   StreamingMerger<T, TagT>::StreamingMerger(
       const uint32_t ndims, Distance<T> *dist, diskann::Metric dist_metric, const uint32_t beam_width,
@@ -457,6 +459,17 @@ namespace diskann {
   }
 
   template<typename T, typename TagT>
+  void StreamingMerger<T, TagT>::dump_to_disk_kv(const uint32_t start_id,
+                                              const char *   buf,
+                                              const uint32_t n_sectors,
+                                              std::ofstream & output_writer,
+                                                 Vecrocks::KvWrapper* kv) {
+    for (int i = start_id; i < n_sectors; ++i) {
+      kv->put("edge_" + std::to_string(start_id), "");
+    }
+  }
+
+  template<typename T, typename TagT>
   void StreamingMerger<T, TagT>::compute_deleted_ids() {
     // process disk deleted tags
     for (uint32_t i = 0; i < this->disk_npts; i++) {
@@ -490,6 +503,8 @@ namespace diskann {
 
   template<typename T, typename TagT>
   void StreamingMerger<T, TagT>::process_deletes() {
+    bool useKv = std::string(std::getenv("USE_KV")) == "true";
+
     // buf to hold data being read
     char *buf = nullptr;
     alloc_aligned((void **) &buf, SECTORS_PER_MERGE * SECTOR_LEN, SECTOR_LEN);
@@ -499,13 +514,19 @@ namespace diskann {
     
     diskann::cout << "Writing delete consolidated graph to "
                   << this->temp_disk_index_path << std::endl;
+    // todo change to RocksDBKV
+    Vecrocks::KvWrapper* kv = new Vecrocks::MemoryKv();
+    kv->init(this->temp_disk_index_path);
+
     std::ofstream output_writer(this->temp_disk_index_path, 
                                 std::ios::out | std::ios::binary);
     assert(output_writer.is_open());
     // skip writing header for now
     //    this->output_writer.seekp(SECTOR_LEN, std::ios::beg);
     std::unique_ptr<char[]> sector_buf = std::make_unique<char[]>(SECTOR_LEN);
-    output_writer.write(sector_buf.get(), SECTOR_LEN);
+    if (!useKv) {
+      output_writer.write(sector_buf.get(), SECTOR_LEN);
+    }
 
     Timer delete_timer;
     // batch consolidate deletes
@@ -533,7 +554,11 @@ namespace diskann {
       }
 
       uint64_t prev_pos = output_writer.tellp();
-      this->dump_to_disk(start_id, buf, SECTORS_PER_MERGE, output_writer);
+      if (useKv) {
+        this->dump_to_disk_kv(start_id, buf, SECTORS_PER_MERGE, output_writer, kv);
+      } else {
+        this->dump_to_disk(start_id, buf, SECTORS_PER_MERGE, output_writer);
+      }
       output_writer.flush();
       uint64_t cur_pos = output_writer.tellp();
       if (!(cur_pos - prev_pos == (SECTORS_PER_MERGE * SECTOR_LEN)))
@@ -974,6 +999,8 @@ namespace diskann {
 
   template<typename T, typename TagT>
   void StreamingMerger<T, TagT>::process_merges() {
+    bool useKv = std::string(std::getenv("USE_KV")) == "true";
+
     // buf to hold data being read
     char *buf = nullptr;
     alloc_aligned((void **) &buf, SECTORS_PER_MERGE * SECTOR_LEN, SECTOR_LEN);
@@ -1085,8 +1112,13 @@ namespace diskann {
         counts += lcounts;
       }
 
-      cur_offset += SECTORS_PER_MERGE * SECTOR_LEN;
-      output_writer.write(buf, SECTORS_PER_MERGE * SECTOR_LEN);
+      if (!useKv) {
+        cur_offset += SECTORS_PER_MERGE * SECTOR_LEN;
+        output_writer.write(buf, SECTORS_PER_MERGE * SECTOR_LEN);
+      } else{
+        writeKv(disk_nodes, this->disk_index->kv);
+      }
+
       diskann::cout << new_start_id << " / " << this->disk_npts
                     << " nodes processed.\n";
       start_id = new_start_id;
@@ -1130,6 +1162,20 @@ namespace diskann {
     diskann::cout << "Time to merge the inserts to disk: " << e2e_time << "s."
                   << std::endl;
   }
+  template<typename T, typename TagT>
+  void StreamingMerger<T, TagT>::writeKv(std::vector<DiskNode<T>> nodes, Vecrocks::KvWrapper *kv){
+    for (auto node  : nodes) {
+      std::vector<T> coords_vector = std::vector<T>(node.coords, node.coords + this->ndims);
+      json data(coords_vector);
+      kv->put("node_" + std::to_string(node.id), data.dump());
+
+      kv->put("edge_" + std::to_string(node.id) + "_meta", std::to_string(node.nnbrs));
+
+      for (size_t i = 0; i < node.nnbrs; ++i) {
+        kv->put("edge_" + std::to_string(node.id) + "_meta", std::to_string(node.nnbrs));
+      }
+    }
+  }
 
 
   template<typename T, typename TagT>
@@ -1170,6 +1216,7 @@ namespace diskann {
 
     //    std::shared_ptr<AlignedFileReader> reader =
     //    std::make_shared<MemAlignedFileReader>();
+    // todo @lh add kv
     this->disk_index = new PQFlashIndex<T, TagT>(
         this->dist_metric, reader, this->_single_file_index, true);
     diskann::cout << "Created PQFlashIndex inside index_merger " << std::endl;
@@ -1487,6 +1534,7 @@ namespace diskann {
     // reset temp_file ptr
     //this->output_writer.close();
 
+    // todo @lh copy db
     auto copy_file = [](const std::string &src, const std::string &dest) {
       diskann::cout << "COPY :: " << src << " --> " << dest << "\n";
       std::ofstream dest_writer(dest, std::ios::binary);

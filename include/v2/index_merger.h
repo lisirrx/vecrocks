@@ -79,7 +79,8 @@ namespace diskann {
 
     void dump_to_disk(const uint32_t start_id, const char *buf,
                       const uint32_t n_sector, std::ofstream& output_writer);
-
+    void dump_to_disk_kv(const uint32_t start_id, const char *buf,
+                      const uint32_t n_sector, std::ofstream& output_writer, Vecrocks::KvWrapper* kv);
     /* delete related funcs */
     // converts tags into deleted IDs
     void compute_deleted_ids();
@@ -180,5 +181,6 @@ namespace diskann {
     bool _single_file_index = false;
 
     std::string TMP_FOLDER;
+    void        writeKv(std::vector<DiskNode<T>> nodes, Vecrocks::KvWrapper *kv);
   };
 };  // namespace diskann

@@ -7,13 +7,15 @@
 #include <string>
 #include <unordered_map>
 #include <memory>
+#include "options.h"
+#include "rocksdb/slice_transform.h"
 namespace Vecrocks {
   class KvWrapper {
    public:
-    virtual void        init(std::string& path) = 0;
+    virtual int        init(std::string& path) = 0;
     virtual std::string get(const std::string& key) = 0;
 
-    virtual void put(const std::string& key, const std::string& value) = 0;
+    virtual int put(const std::string& key, const std::string& value) = 0;
 
     virtual void prefix_scan(
         const std::string&                                prefix,
@@ -34,13 +36,14 @@ namespace Vecrocks {
     }
 
    public:
-    void init(std::string& path) override {
+    int init(std::string& path) override {
     }
     std::string get(const std::string& key) override {
       return _map->at(key);
     }
-    void put(const std::string& key, const std::string& value) override {
+    int put(const std::string& key, const std::string& value) override {
       _map->emplace(key, value);
+      return 0;
     }
     void printAll() override {
       for (auto& kv : *_map) {
@@ -100,19 +103,58 @@ namespace Vecrocks {
 
   class RocksDBKv : public KvWrapper {
    public:
-    void init(std::string& path) override {
+    int init(std::string& path) override {
+      rocksdb::Options options;
+      options.create_if_missing = true;
+      rocksdb::Status status = rocksdb::DB::Open(options, path, &this->kv);
+
+      if (!status.ok()) {
+        this->kv->Close();
+        delete this->kv;
+        this->kv = nullptr;
+        return 1;
+      }
+      return 0;
     }
     std::string get(const std::string& key) override {
+      std::string value;
+      this->kv->Get(rocksdb::ReadOptions(), key,
+                    &value);
+      return value;
     }
-    void put(const std::string& key, const std::string& value) override {
+    int put(const std::string& key, const std::string& value) override {
+      auto status =
+          this->kv->Put(rocksdb::WriteOptions(),key,value);
+
+      if (!status.ok()) {
+        return 1;
+      }
     }
     void printAll() override {
     }
     void prefix_scan(
         const std::string&                                prefix,
         std::vector<std::pair<std::string, std::string>>& res) override {
+      rocksdb::Options options;
+
+
+      options.prefix_extractor.reset(rocksdb::NewCappedPrefixTransform(prefix.size()));
+
+      // load all data to build index.
+      auto iter = this->kv->NewIterator(rocksdb::ReadOptions());
+      for (iter->Seek(prefix); iter->Valid(); iter->Next()) {
+        std::string key = iter->key().ToString();
+        if (key.find(prefix) != 0) {
+          break;
+        }
+        res.emplace_back(std::make_pair(key, iter->value().ToString()));
+      }
     }
     void build_cache() override {
     }
+
+   private:
+    rocksdb::DB* kv;
+
   };
 }  // namespace Vecrocks

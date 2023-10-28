@@ -35,21 +35,19 @@ namespace Vecrocks {
     *dbptr = new DB<T, TagT>(merge_insert, options.search_candidate_list_size_factor, id_generator);
 
     (*dbptr)->_start_merge_thread(std::chrono::milliseconds(options.merge_check_interval));
-    // todo @lh flush job
+    (*dbptr)->_start_flush_thread(std::chrono::milliseconds(options.merge_check_interval));
     return 0;
   }
 
   template<typename T, typename TagT>
   TagT DB<T, TagT>::insert(const TagT id, const T *vec) {
     _merge_insert_index->insert(vec, id);
-    // todo @lh save to kvstore
     return id;
   }
 
   template<typename T, typename TagT>
   TagT DB<T, TagT>::insert(const T *vec) {
     TagT id = _id_generator->next();
-    // todo @lh save to kvstore
     _merge_insert_index->insert(vec, id);
     return id;
   }
@@ -79,12 +77,30 @@ namespace Vecrocks {
 
     this->_merge_thread = merge_trigger;
   }
+
+  template<typename T, typename TagT>
+  void DB<T, TagT>::_start_merge_thread(
+      std::chrono::milliseconds check_interval) {
+    std::thread *merge_trigger = new std::thread([&](){
+      while (1){
+        if (!this->_merge_thread_running.load()){
+          return ;
+        }
+        this->_merge_insert_index->trigger_merge();
+        std::this_thread::sleep_for(check_interval);
+      }
+    });
+
+    this->_merge_thread = merge_trigger;
+
+  }
   template<typename T, typename TagT>
   DB<T, TagT>::DB(diskann::MergeInsert<T, TagT> *merge_insert_index,
      float candidate_list_size_factor, Vecrocks::IdGenerator<TagT> *id_generator) :
         _merge_insert_index(merge_insert_index), _candidate_list_size_factor(candidate_list_size_factor), _id_generator(id_generator){
     _merge_thread_running.store(true);
   }
+
 
   template<typename T, typename TagT>
   DB<T, TagT>::~DB(){

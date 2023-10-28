@@ -302,6 +302,34 @@ namespace diskann {
             }
           }
         }
+
+        // check on disk graph
+        {
+          if (_active_index == 0) {
+            // todo @lh add new cached memory index
+            auto ondisk_memeory_index = std::make_shared<diskann::Index<T, TagT>>(
+                this->_dist_metric, _dim, _merge_th * 2, 1, _single_file_index, 1);
+            std::string save_path;
+            bool  load_disk_graph = true;
+            if (_active_index == 0 && !_clearing_index_1.load()){
+              save_path = _mem_index_prefix + "_1";
+            } else if(_active_index == 1 && !_clearing_index_0.load()){
+              save_path = _mem_index_prefix + "_0";
+            } else {
+              load_disk_graph = false;
+            }
+            if (load_disk_graph) {
+              std::vector<Neighbor_Tag<TagT>> best_on_disk_mem_index;
+
+              ondisk_memeory_index->load(save_path.c_str());
+              ondisk_memeory_index->search(query, (uint32_t) search_L,
+                                           (uint32_t) search_L, best_on_disk_mem_index);
+              for (auto iter : best_on_disk_mem_index)
+                best.insert(iter);
+            }
+          }
+
+        }
         std::vector<Neighbor_Tag<TagT>> best_vec;
         for(auto iter : best)
             best_vec.emplace_back(iter);

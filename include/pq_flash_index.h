@@ -231,6 +231,9 @@ namespace diskann {
     bool useKv(){
       return kv != nullptr;
     }
+
+    Vecrocks::KvWrapper* kv;
+
    protected:
     DISKANN_DLLEXPORT void use_medoids_data_as_centroids();
     DISKANN_DLLEXPORT void setup_thread_data(_u64 nthreads);
@@ -308,7 +311,6 @@ namespace diskann {
     tsl::robin_set<_u32> invalid_ids;
     std::mutex           invalid_ids_lock;
 
-    Vecrocks::KvWrapper* kv;
 
 // tags
 #ifdef EXEC_ENV_OLS

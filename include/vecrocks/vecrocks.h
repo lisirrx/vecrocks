@@ -52,4 +52,5 @@ namespace Vecrocks {
     void _start_merge_thread(std::chrono::milliseconds check_interval);
   };
 
+
 }

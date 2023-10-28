@@ -61,6 +61,8 @@ namespace diskann {
     // its threshold - triggers index switch and merge
     DISKANN_DLLEXPORT int trigger_flush();
 
+    int  trigger_merge();
+
     DISKANN_DLLEXPORT void final_merge();
 
     DISKANN_DLLEXPORT std::string ret_merge_prefix();
@@ -158,6 +160,5 @@ namespace diskann {
     bool _skip_disk_search = false;
 
 
-    int  trigger_merge();
   };
 };  // namespace diskann
