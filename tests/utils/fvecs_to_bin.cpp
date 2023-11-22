@@ -17,7 +17,7 @@ void block_convert(std::ifstream& reader, std::ofstream& writer,
 }
 
 int main(int argc, char** argv) {
-  if (argc != 3) {
+  if (argc < 3) {
     diskann::cout << argv[0] << " input_fvecs output_bin" << std::endl;
     exit(-1);
   }
@@ -37,14 +37,17 @@ int main(int argc, char** argv) {
   _u64 nblks = ROUND_UP(npts, blk_size) / blk_size;
   diskann::cout << "# blks: " << nblks << std::endl;
   std::ofstream writer(argv[2], std::ios::binary);
-  int           npts_s32 = (_s32) npts;
-  int           ndims_s32 = (_s32) ndims;
+
+  int keep_npts = atoi(argv[3]);
+
+  int npts_s32 = (_s32) keep_npts;
+  int ndims_s32 = (_s32) ndims;
   writer.write((char*) &npts_s32, sizeof(_s32));
   writer.write((char*) &ndims_s32, sizeof(_s32));
   float* read_buf = new float[npts * (ndims + 1)];
-  float* write_buf = new float[npts * ndims];
+  float* write_buf = new float[keep_npts * ndims];
   for (_u64 i = 0; i < nblks; i++) {
-    _u64 cblk_size = std::min(npts - i * blk_size, blk_size);
+    _u64 cblk_size = std::min(keep_npts - i * blk_size, blk_size);
     block_convert(reader, writer, read_buf, write_buf, cblk_size, ndims);
     diskann::cout << "Block #" << i << " written" << std::endl;
   }

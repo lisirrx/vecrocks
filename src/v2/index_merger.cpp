@@ -468,7 +468,7 @@ namespace diskann {
     diskann::cout << "Found " << this->disk_deleted_ids.size()
                   << " tags to delete from SSD-DiskANN\n";
 
-//    this->mem_deleted_ids.resize(this->mem_data.size());
+    this->mem_deleted_ids.resize(this->mem_data.size());
     for (uint32_t i = 0; i < this->mem_data.size(); i++) {
       tsl::robin_set<uint32_t> &deleted_ids = this->mem_deleted_ids[i];
       for (uint32_t id = 0; id < this->mem_npts[i]; id++) {
@@ -930,10 +930,11 @@ namespace diskann {
     diskann::Timer timer;
     diskann::cout << "Writing new tags to " << tag_out_filename << "\n";
 
-    TagT *cur_tags;
+    TagT *cur_tags = new TagT[npts];
 
     size_t allocSize = npts * sizeof(TagT);
-    alloc_aligned(((void **) &cur_tags), allocSize, 8 * sizeof(TagT));
+    // todo fix aligned
+//    alloc_aligned(((void **) &cur_tags), allocSize, 8 * sizeof(TagT));
 
     //TODO: We must detect holes in a better way. Currently, it is possible
     //that one of the tags will be uint32_t::max() and will fail.
@@ -966,8 +967,8 @@ namespace diskann {
     //Should not mix delete with alloc aligned
     //TODO: This will work because we are dealing with uint64 at the moment. 
     //If we ever have string tags, this'll fail spectacularly.
-    //delete[] cur_tags;
-    aligned_free(cur_tags);
+    delete[] cur_tags;
+//    aligned_free(cur_tags);
     // release all tags -- automatically deleted since using `unique_ptr`
     this->mem_tags.clear();
   }

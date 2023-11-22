@@ -356,3 +356,7 @@ MigrationBackup/
 /.vs
 /out/build/x64-Debug
 cscope*
+
+run_test_root
+cmake-build-debug
+.idea

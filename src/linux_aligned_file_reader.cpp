@@ -198,7 +198,7 @@ void LinuxAlignedFileReader::read(std::vector<AlignedRead> &read_reqs,
 }
 
 void LinuxAlignedFileReader::sequential_write(AlignedRead &write_req,
-                                              IOContext &  ctx) {
+                                              IOContext   &ctx) {
   assert(this->file_desc != -1);
   // check inputs
   assert(IS_ALIGNED(write_req.offset, 4096));
@@ -208,7 +208,7 @@ void LinuxAlignedFileReader::sequential_write(AlignedRead &write_req,
   // create write request
   io_event_t  evt;
   struct iocb cb;
-  iocb_t *    cbs = &cb;
+  iocb_t     *cbs = &cb;
   io_prep_pwrite(&cb, this->file_desc, write_req.buf, write_req.len,
                  write_req.offset);
 

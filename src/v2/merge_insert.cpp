@@ -113,9 +113,9 @@ namespace diskann {
         this->_dist_metric, reader, _single_file_index, true);
 
     std::string pq_prefix = _disk_index_prefix_in + "_pq";
-    std::string disk_index_file = _disk_index_prefix_in + "_disk.index";
+    std::string disk_index_file = this->_single_file_index ? _disk_index_prefix_in : _disk_index_prefix_in + "_disk.index";
     int         res =
-        _disk_index->load(_disk_index_prefix_in.c_str(), _num_search_threads);
+        _disk_index->load(disk_index_file.c_str(), _num_search_threads);
     if (res != 0) {
       diskann::cout << "Failed to load disk index in MergeInsert constructor"
                     << std::endl;
@@ -385,11 +385,14 @@ namespace diskann {
          bool expected_value = false;
          _check_switch_index.compare_exchange_strong(expected_value, true);
         std::unique_lock<std::shared_timed_mutex> lock(_index_lock);
+        diskann::cout << "Merge Insert get _index_lock " << std::endl;
+
         //make new index active
         if(_active_index == 0)
         {
             _mem_index_1 = std::make_shared<diskann::Index<T, TagT>>(this->_dist_metric, _dim, _merge_th * 2 , 1, _single_file_index, 1);
             bool expected_active = false;
+            diskann::cout << "Get _active_1 " << _active_1.load() << std::endl;
             if (_active_1.compare_exchange_strong(expected_active, true)) {
               diskann::cout << "Initialised new index for _mem_index_1 " << std::endl;
             } else {
@@ -402,6 +405,7 @@ namespace diskann {
         {
             _mem_index_0 = std::make_shared<diskann::Index<T, TagT>>(this->_dist_metric, _dim, _merge_th * 2, 1, _single_file_index, 1);
             bool expected_active = false;
+            diskann::cout << "Get _active_0 " << _active_0.load() << std::endl;
             if (_active_0.compare_exchange_strong(expected_active, true)) {
               diskann::cout << "Initialised new index for _mem_index_0 " << std::endl;
             } else {

@@ -58,7 +58,7 @@ if(MSVC)
 	target_link_libraries(test_concurr_merge_insert debug ${CMAKE_LIBRARY_OUTPUT_DIRECTORY_DEBUG}/nsg_dll.lib)
 	target_link_libraries(test_concurr_merge_insert optimized ${CMAKE_LIBRARY_OUTPUT_DIRECTORY_RELEASE}/nsg_dll.lib)
 else() 
-	target_link_libraries(test_concurr_merge_insert ${PROJECT_NAME} aio)
+	target_link_libraries(test_concurr_merge_insert ${PROJECT_NAME} -ltcmalloc aio)
 endif()
 
 add_executable(test_incremental_index test_incremental_index.cpp)
